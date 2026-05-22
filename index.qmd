@@ -1,0 +1,180 @@
+---
+title: "Trabajo_3_OPT"
+autor: "Trinidad Ibarra"
+format: html
+editor: visual
+bibliography: referencias.bib
+---
+
+## **Introducción**
+
+Este trabajo analiza la confianza en los medios de comunicación en Chile a partir de la base de datos *ELSOC 2022.* La investigación busca responder cómo varía esta confianza según la edad, el sexo y el nivel educacional de las personas. Se plantea como hipótesis que, a mayor nivel educacional, menor sería la confianza en los medios. En esta tercera entrega se retoma el análisis descriptivo del Trabajo 2 y se incorpora el estudio de asociación entre variables, junto con la construcción de un índice de confianza institucional y su consistencia interna mediante alfa de Cronbach.
+
+```{r}
+#| echo: FALSE
+#| message: false
+#| warning: false
+
+library(haven)
+library(dplyr)
+library(ggplot2)
+library(knitr)
+library(psych)
+data <- read_dta("C:/Users/trini/OneDrive/Escritorio/Trabajo_R_OPT/input/ELSOC_2022.dta")
+names(data)
+```
+
+Dando una perspectiva sociológica, según Habermas, los medios de comunicación son relevantes ya que participan en la formación de la opinión pública y en circulación de discursos dentro del espacio público. @habermas1998
+
+### **Construcción de un índice de confianza institucional**
+
+```{r}
+#| echo: false
+#| message: false
+#| warning: false
+
+# Selección de variables para el índice
+confianza_institucional <- data %>%
+  transmute(
+    conf_gob = as.numeric(conf_gob),
+    conf_partidos = as.numeric(conf_partidos),
+    conf_congreso = as.numeric(conf_congreso),
+    conf_medios = as.numeric(conf_medios)
+  ) %>%
+  mutate(across(everything(), ~ ifelse(.x < 0, NA, .x)))
+```
+
+Para la construcción del índice de confianza institucional, se consideran las variables de confianza en el gobierno, los partidos políticos, el congreso y los medios de comunicación, ya que todas remiten a una misma dimensión general: la confianza hacia instituciones relevantes de la vida social y política. Estas variables permiten observar la confianza en los medios dentro de un marco más amplio de confianza institucional.
+
+En esta etapa, a diferencia del trabajo anterior, se avanza en la construcción del índice mediante la combinación de estas variables y la evaluación de su consistencia interna a través del alfa de Cronbach. Esto permite analizar si las variables seleccionadas se relacionan entre sí de manera suficiente para ser utilizadas como una escala de confianza institucional.
+
+```{r}
+#| echo: false
+#| message: false
+#| warning: false
+
+data$indice_confianza_institucional <- rowMeans(
+  confianza_institucional,
+  na.rm = TRUE
+)
+
+summary(data$indice_confianza_institucional)
+```
+
+El índice de confianza institucional fue construido a partir del promedio de las variables de confianza en el gobierno, partidos políticos, congreso y medios de comunicación. Los resultados muestran que el índice varía entre 1 y 5, donde valores más bajos indican menor confianza institucional y valores más altos indican mayor confianza. El promedio del índice es de 1,92, lo que indica que, en general, la confianza institucional de las personas encuestadas tiende a ubicarse en niveles bajos. La mediana es de 1,75, lo que refuerza esta tendencia hacia una baja confianza institucional. Además, se observan 1721 casos perdidos, por lo que los resultados deben interpretarse considerando esta limitación.
+
+### Tabla de variables principales 
+
+```{r}
+#| echo: false
+#| message: false
+#| warning: false
+
+variables_principales <- data %>%
+  transmute(
+    edad = as.numeric(edad),
+    nivel_educ = as.numeric(nivel_educ),
+    conf_medios = as.numeric(conf_medios)
+  )
+
+tabla_correlaciones_principales <- cor(
+  variables_principales,
+  use = "pairwise.complete.obs",
+  method = "spearman"
+)
+
+kable(
+  round(tabla_correlaciones_principales, 2),
+  caption = "Tabla de correlaciones entre variables principales"
+)
+```
+
+La tabla presenta las correlaciones de Spearman entre edad, nivel educacional y confianza en los medios de comunicación. En primer lugar, se observa una asociación negativa moderada entre edad y nivel educacional (-0,41), lo que indica que, en esta muestra, a mayor edad tiende a observarse un menor nivel educacional. Respecto a la relación entre edad y confianza en los medios, la correlación es positiva pero débil (0,16), lo que sugiere que las personas de mayor edad tienden a presentar niveles levemente más altos de confianza en los medios.
+
+En cuanto a la relación central de la hipótesis, entre nivel educacional y confianza en los medios, se observa una correlación negativa muy débil (-0,08). Esto va en la dirección de la hipótesis planteada, ya que sugiere que a mayor nivel educacional podría disminuir la confianza en los medios; sin embargo, la asociación es baja, por lo que no se puede afirmar que exista una relación fuerte entre ambas variables.
+
+En conjunto, los resultados muestran asociaciones débiles entre las variables sociodemográficas y la confianza en los medios, por lo que la hipótesis encuentra un apoyo parcial, pero limitado.
+
+### Gráfico bivariado: confianza en medios según nivel educacional
+
+```{r}
+data_grafico <- data %>%
+  mutate(
+    nivel_educ_limpio = as.numeric(nivel_educ),
+    conf_medios_limpio = as.numeric(conf_medios),
+    
+    nivel_educ_limpio = ifelse(nivel_educ_limpio %in% c(1, 2, 3, 4),
+                               nivel_educ_limpio, NA),
+    conf_medios_limpio = ifelse(conf_medios_limpio %in% c(1, 2, 3, 4, 5),
+                                conf_medios_limpio, NA),
+    
+    nivel_educ_limpio = factor(nivel_educ_limpio,
+                               levels = c(1, 2, 3, 4),
+                               labels = c("Básica", "Media", "Técnica", "Universitaria")),
+    
+    conf_medios_limpio = factor(conf_medios_limpio,
+                                levels = c(1, 2, 3, 4, 5),
+                                labels = c("Nada", "Poca", "Media", "Bastante", "Mucha"))
+  ) %>%
+  filter(!is.na(nivel_educ_limpio),
+         !is.na(conf_medios_limpio))
+
+ggplot(data_grafico,
+       aes(x = nivel_educ_limpio,
+           fill = conf_medios_limpio)) +
+  geom_bar(position = "dodge") +
+  labs(title = "Confianza en medios según nivel educacional",
+       x = "Nivel educacional",
+       y = "Cantidad de personas",
+       fill = "Nivel de confianza") +
+  scale_fill_brewer(palette = "Blues") +
+  theme_minimal()
+```
+
+El gráfico muestra la distribución de los niveles de confianza en los medios de comunicación según el nivel educacional de las personas encuestadas. En todos los grupos educativos, la mayor cantidad de respuestas se concentra en el nivel de confianza media, especialmente entre quienes tienen educación media, técnica y universitaria. También se observa que los niveles de confianza bastante y mucha son menos frecuentes, sobre todo en el grupo universitario. En este sentido, el gráfico permite observar que la confianza en los medios tiende a ubicarse principalmente en niveles bajos e intermedios, lo que se relaciona parcialmente con la hipótesis de que a mayor nivel educacional podría disminuir la confianza en los medios.
+
+### Tabla de correlaciones 
+
+```{r}
+#| echo: false
+#| message: false
+#| warning: false
+
+tabla_correlaciones <- cor(confianza_institucional,
+                           use = "pairwise.complete.obs",
+                           method = "spearman")
+
+kable(round(tabla_correlaciones, 2),
+      caption = "Tabla de correlaciones entre variables de confianza institucional")
+```
+
+La tabla presenta las correlaciones de Spearman entre las variables de confianza institucional: confianza en el gobierno, partidos políticos, congreso y medios de comunicación. En general, se observan asociaciones positivas entre todas las variables, lo que indica que quienes tienden a confiar más en una institución también suelen presentar mayores niveles de confianza en otras. La relación más fuerte se observa entre confianza en partidos políticos y confianza en el congreso, con una correlación de 0,53, seguida por la relación entre confianza en el gobierno y partidos políticos, con 0,47. En cambio, la confianza en los medios presenta asociaciones más débiles con el gobierno y los partidos políticos, aunque mantiene una relación moderada con el congreso. Esto sugiere que la confianza en los medios se vincula con la confianza institucional general, pero de manera menos intensa que las instituciones políticas entre sí.
+
+### Alfa de Cronbach
+
+```{r}
+#| echo: false
+#| message: false
+#| warning: false
+
+confianza_institucional <- data %>%
+  transmute(
+    conf_gob = as.numeric(conf_gob),
+    conf_partidos = as.numeric(conf_partidos),
+    conf_congreso = as.numeric(conf_congreso),
+    conf_medios = as.numeric(conf_medios)
+  ) %>%
+  mutate(across(everything(), ~ ifelse(.x < 0, NA, .x)))
+
+psych::alpha(confianza_institucional)
+```
+
+El análisis de consistencia interna del índice de confianza institucional muestra un alfa de Cronbach de 0,64 y un alfa estandarizado de 0,67. Esto indica una consistencia interna moderada, es decir, las variables seleccionadas se relacionan entre sí de manera aceptable, aunque no de forma totalmente fuerte. Por lo tanto, el índice puede ser utilizado con cautela para aproximarse a la confianza institucional. Al revisar el efecto de eliminar cada variable, se observa que si se elimina la variable confianza en medios, el alfa aumenta a aproximadamente 0,69. Esto sugiere que la confianza en los medios se relaciona de manera más débil con el resto de las variables institucionales, especialmente en comparación con la confianza en el gobierno, los partidos políticos y el congreso. En cambio, eliminar variables como confianza en el congreso o en los partidos reduce el alfa, lo que indica que estas variables aportan más a la consistencia del índice.
+
+En conjunto, los resultados muestran que las variables de confianza al gobierno, partidos políticos, congreso y medios comparten una dimensión común de confianza institucional, aunque la confianza en medios parece tener un comportamiento algo más diferenciado. Esto es relevante para la investigación, ya que permite situar la confianza en los medios dentro de un marco más amplio de confianza hacia las instituciones, pero reconociendo que no se comporta exactamente igual que las instituciones políticas tradicionales.
+
+## Conclusión
+
+En conclusión, el análisis realizado permite observar que la confianza en los medios de comunicación en Chile se concentra principalmente en niveles bajos e intermedios. A partir de las variables sociodemográficas consideradas, se aprecia que la edad presenta una asociación positiva débil con la confianza en medios, mientras que el nivel educacional muestra una relación negativa muy débil. Esto va en la dirección de la hipótesis planteada, según la cual a mayor nivel educacional disminuiría la confianza en los medios, aunque la asociación encontrada no es lo suficientemente fuerte como para afirmarlo de manera concluyente.
+
+Por otra parte, la construcción del índice de confianza institucional permitió situar la confianza en los medios dentro de un fenómeno más amplio de confianza hacia instituciones como el gobierno, los partidos políticos y el congreso. El alfa de Cronbach obtenido muestra una consistencia interna moderada, por lo que el índice puede utilizarse con cautela como una aproximación a la confianza institucional. En conjunto, los resultados muestran que la confianza en los medios se relaciona parcialmente con características sociales e institucionales, pero que requiere ser analizada con mayor profundidad en futuras investigaciones.
